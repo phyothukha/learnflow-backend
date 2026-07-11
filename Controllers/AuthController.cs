@@ -50,10 +50,11 @@ public class AuthController : ControllerBase
                 Roles = u.UserRoles
                     .Select(ur => ur.Role.Name)
                     .ToList(),
-                Permissions = u.UserRoles
+                // Project raw columns only — string concat + Distinct inside a
+                // correlated collection projection is not translatable by EF Core.
+                PermissionPairs = u.UserRoles
                     .SelectMany(ur => ur.Role.RolePermissions)
-                    .Select(rp => rp.Permission.Resource + "_" + rp.Permission.Action)
-                    .Distinct()
+                    .Select(rp => new { rp.Permission.Resource, rp.Permission.Action })
                     .ToList()
             })
             .FirstOrDefaultAsync();
@@ -89,6 +90,10 @@ public class AuthController : ControllerBase
         }
 
         // Step 4: Generate JWT
+        var permissions = user.PermissionPairs
+            .Select(p => p.Resource + "_" + p.Action)
+            .Distinct()
+            .ToList();
         var token = GenerateJwtToken(user.Id, user.Email, user.Roles);
 
         _logger.LogInformation("User {Email} logged in successfully", user.Email);
@@ -104,7 +109,7 @@ public class AuthController : ControllerBase
                 user.Email,
                 user.Name,
                 user.Roles,
-                user.Permissions
+                Permissions = permissions
             }
         });
     }

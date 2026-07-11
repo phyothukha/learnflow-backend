@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace learnflow_service.Models;
 
@@ -14,7 +15,7 @@ public class TopicFolder : BaseModel
     [Required, MaxLength(255)]
     public string Name { get; set; } = null!;
 
-    [ForeignKey(nameof(TopicId))]
+    [ForeignKey(nameof(TopicId)), ValidateNever]
     public Topic Topic { get; set; } = null!;
 
     [ForeignKey(nameof(ParentFolderId))]
