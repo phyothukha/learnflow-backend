@@ -217,6 +217,11 @@ static IEdmModel GetEdmModel()
     builder.EntitySet<AdminPermission>("AdminPermissions");
     builder.EntitySet<AdminRolePermission>("AdminRolePermissions");
     builder.EntitySet<AdminUserRole>("AdminUserRoles");
+    builder.EntitySet<Topic>("Topics");
+    builder.EntitySet<TopicFolder>("TopicFolders");
+    builder.EntitySet<Document>("Documents");
+    builder.EntitySet<Note>("Notes");
+    builder.EntitySet<StudyBlock>("StudyBlocks");
     return builder.GetEdmModel();
 }
 

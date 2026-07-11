@@ -13,6 +13,11 @@ public class ApplicationDbContext : DbContext
     public DbSet<AdminPermission> AdminPermissions { get; set; }
     public DbSet<AdminRolePermission> AdminRolePermissions { get; set; }
     public DbSet<AdminUserRole> AdminUserRoles { get; set; }
+    public DbSet<Topic> Topics { get; set; }
+    public DbSet<TopicFolder> TopicFolders { get; set; }
+    public DbSet<Document> Documents { get; set; }
+    public DbSet<Note> Notes { get; set; }
+    public DbSet<StudyBlock> StudyBlocks { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -60,5 +65,43 @@ public class ApplicationDbContext : DbContext
 
         builder.Entity<AdminRolePermission>(e => e.ToTable("AdminRolePermissions"));
         builder.Entity<AdminUserRole>(e => e.ToTable("AdminUserRoles"));
+
+        builder.Entity<Topic>(e =>
+        {
+            e.ToTable("Topics");
+            e.HasMany(x => x.Folders).WithOne(f => f.Topic).HasForeignKey(f => f.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Documents).WithOne(d => d.Topic).HasForeignKey(d => d.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Notes).WithOne(n => n.Topic).HasForeignKey(n => n.TopicId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.StudyBlocks).WithOne(b => b.Topic).HasForeignKey(b => b.TopicId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TopicFolder>(e =>
+        {
+            e.ToTable("TopicFolders");
+            e.HasIndex(x => x.TopicId);
+            e.HasMany(x => x.Children).WithOne(f => f.ParentFolder).HasForeignKey(f => f.ParentFolderId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Document>(e =>
+        {
+            e.ToTable("Documents");
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
+            e.HasIndex(x => new { x.TopicId, x.Status });
+            e.HasOne(x => x.Folder).WithMany(f => f.Documents).HasForeignKey(x => x.FolderId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<Note>(e =>
+        {
+            e.ToTable("Notes");
+            e.HasIndex(x => x.TopicId);
+            e.HasOne(x => x.Document).WithMany(d => d.Notes).HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<StudyBlock>(e =>
+        {
+            e.ToTable("StudyBlocks");
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
+            e.HasIndex(x => x.StartAt);
+        });
     }
 }

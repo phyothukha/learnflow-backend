@@ -48,6 +48,28 @@ VALUES
     ('d0000000-0000-0000-0000-00000000000d', 'enrollments', 'delete', 'Delete enrollments', NOW(), NOW())
 ON CONFLICT DO NOTHING;
 
+-- Productivity domain (topics, documents, notes, schedule, analytics)
+INSERT INTO "AdminPermissions" ("Id", "Resource", "Action", "Description", "CreatedAt", "UpdatedAt")
+VALUES
+    ('d0000000-0000-0000-0000-00000000000e', 'topics',    'view',   'View topics',          NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000000f', 'topics',    'create', 'Create topics',        NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000010', 'topics',    'update', 'Update topics',        NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000011', 'topics',    'delete', 'Delete topics',        NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000012', 'documents', 'view',   'View documents',       NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000013', 'documents', 'create', 'Create documents',     NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000014', 'documents', 'update', 'Update documents',     NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000015', 'documents', 'delete', 'Delete documents',     NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000016', 'notes',     'view',   'View notes',           NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000017', 'notes',     'create', 'Create notes',         NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000018', 'notes',     'update', 'Update notes',         NOW(), NOW()),
+    ('d0000000-0000-0000-0000-000000000019', 'notes',     'delete', 'Delete notes',         NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000001a', 'schedule',  'view',   'View schedule',        NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000001b', 'schedule',  'create', 'Create study blocks',  NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000001c', 'schedule',  'update', 'Update study blocks',  NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000001d', 'schedule',  'delete', 'Delete study blocks',  NOW(), NOW()),
+    ('d0000000-0000-0000-0000-00000000001e', 'analytics', 'view',   'View analytics',       NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
 INSERT INTO "AdminRolePermissions" ("Id", "RoleId", "PermissionId", "CreatedAt")
 SELECT gen_random_uuid(), 'b0000000-0000-0000-0000-000000000001', p."Id", NOW()
 FROM "AdminPermissions" p
