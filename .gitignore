@@ -1,0 +1,11 @@
+bin/
+obj/
+out/
+.env
+.env.*
+!.env.example
+*.user
+.vs/
+.vscode/
+prod_firebase.json
+*_firebase.json

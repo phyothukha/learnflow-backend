@@ -1,0 +1,28 @@
+services:
+  app:
+    container_name: learnflow
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: learnflow
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8005:8080"
+    depends_on:
+      - db
+
+  db:
+    container_name: learnflow-db
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: learnflow
+      POSTGRES_PASSWORD: learnflow
+      POSTGRES_DB: learnflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - learnflow_pgdata:/var/lib/postgresql/data
+
+volumes:
+  learnflow_pgdata:
