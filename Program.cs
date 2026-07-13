@@ -104,6 +104,10 @@ try
     builder.Services
         .AddControllers()
         .AddOData(opt =>
+        {
+            // Treat all DateTime payloads as UTC — otherwise OData converts
+            // incoming/outgoing values through the server's local timezone.
+            opt.TimeZone = TimeZoneInfo.Utc;
             opt.AddRouteComponents(
                     "v1",
                     GetEdmModel(),
@@ -116,9 +120,12 @@ try
                 .Count()
                 .Select()
                 .Expand()
-                .SetMaxTop(100))
+                .SetMaxTop(100);
+        })
         .AddJsonOptions(options =>
         {
+            // PascalCase like the OData endpoints (frontend interfaces expect it).
+            options.JsonSerializerOptions.PropertyNamingPolicy = null;
             options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             options.JsonSerializerOptions.Converters.Add(new FlexibleTimeSpanJsonConverter());
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
