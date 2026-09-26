@@ -1,77 +1,53 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Deltas;
-using Microsoft.AspNetCore.OData.Formatter;
-using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Results;
-using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using learnflow_service.Models;
+using learnflow_service.Dtos;
+using learnflow_service.Services;
 
 namespace learnflow_service.Controllers;
 
-public class TopicsController : ODataController
+[ApiController]
+[Route("v1/[controller]")]
+public class TopicsController : ControllerBase
 {
-    private readonly ApplicationDbContext _readDb;
-    private readonly ApplicationDbContext _writeDb;
+    private readonly ITopicService _topicService;
 
-    public TopicsController(
-        [FromKeyedServices("read")] ApplicationDbContext readDb,
-        [FromKeyedServices("write")] ApplicationDbContext writeDb)
+    public TopicsController(ITopicService topicService)
     {
-        _readDb = readDb;
-        _writeDb = writeDb;
+        _topicService = topicService;
     }
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public IQueryable<Topic> Get() => _readDb.Topics;
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<TopicResponse>>> Get([FromQuery] TopicQueryParameters query)
+        => Ok(await _topicService.GetAllAsync(query));
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public SingleResult<Topic> Get([FromODataUri] Guid key)
-        => SingleResult.Create(_readDb.Topics.Where(t => t.Id == key));
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<TopicResponse>> Get(Guid id)
+    {
+        var topic = await _topicService.GetByIdAsync(id);
+        return topic == null ? NotFound() : Ok(topic);
+    }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Topic topic)
+    public async Task<ActionResult<TopicResponse>> Post([FromBody] CreateTopicRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        _writeDb.Topics.Add(topic);
-        await _writeDb.SaveChangesAsync();
-        return Created(topic);
+        var created = await _topicService.CreateAsync(request);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Patch([FromODataUri] Guid key, Delta<Topic> delta)
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<TopicResponse>> Patch(Guid id, [FromBody] UpdateTopicRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var existing = await _writeDb.Topics.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        delta.Patch(existing);
-        existing.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await _writeDb.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_writeDb.Topics.Any(t => t.Id == key)) return NotFound();
-            throw;
-        }
-
-        return Updated(existing);
+        var updated = await _topicService.UpdateAsync(id, request);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Delete([FromODataUri] Guid key)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        var existing = await _writeDb.Topics.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        _writeDb.Topics.Remove(existing);
-        await _writeDb.SaveChangesAsync();
-        return StatusCode(StatusCodes.Status204NoContent);
+        var deleted = await _topicService.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
     }
 }

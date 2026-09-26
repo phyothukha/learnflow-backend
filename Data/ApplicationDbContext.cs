@@ -18,6 +18,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Document> Documents { get; set; }
     public DbSet<Note> Notes { get; set; }
     public DbSet<StudyBlock> StudyBlocks { get; set; }
+    public DbSet<Tag> Tags { get; set; }
+    public DbSet<DocumentTag> DocumentTags { get; set; }
+    public DbSet<Attachment> Attachments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -88,6 +91,27 @@ public class ApplicationDbContext : DbContext
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
             e.HasIndex(x => new { x.TopicId, x.Status });
             e.HasOne(x => x.Folder).WithMany(f => f.Documents).HasForeignKey(x => x.FolderId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(x => x.Attachments).WithOne(a => a.Document).HasForeignKey(a => a.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Tag>(e =>
+        {
+            e.ToTable("Tags");
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+
+        builder.Entity<DocumentTag>(e =>
+        {
+            e.ToTable("DocumentTags");
+            e.HasKey(x => new { x.DocumentId, x.TagId });
+            e.HasOne(x => x.Document).WithMany(d => d.DocumentTags).HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Tag).WithMany(t => t.DocumentTags).HasForeignKey(x => x.TagId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Attachment>(e =>
+        {
+            e.ToTable("Attachments");
+            e.HasIndex(x => x.DocumentId);
         });
 
         builder.Entity<Note>(e =>

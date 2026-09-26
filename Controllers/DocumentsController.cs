@@ -1,77 +1,86 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Deltas;
-using Microsoft.AspNetCore.OData.Formatter;
-using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Results;
-using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using learnflow_service.Models;
+using learnflow_service.Dtos;
+using learnflow_service.Services;
 
 namespace learnflow_service.Controllers;
 
-public class DocumentsController : ODataController
+[ApiController]
+[Route("v1/[controller]")]
+public class DocumentsController : ControllerBase
 {
-    private readonly ApplicationDbContext _readDb;
-    private readonly ApplicationDbContext _writeDb;
+    private readonly IDocumentService _documentService;
 
-    public DocumentsController(
-        [FromKeyedServices("read")] ApplicationDbContext readDb,
-        [FromKeyedServices("write")] ApplicationDbContext writeDb)
+    public DocumentsController(IDocumentService documentService)
     {
-        _readDb = readDb;
-        _writeDb = writeDb;
+        _documentService = documentService;
     }
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public IQueryable<Document> Get() => _readDb.Documents;
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<DocumentResponse>>> Get([FromQuery] DocumentQueryParameters query)
+        => Ok(await _documentService.GetAllAsync(query));
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public SingleResult<Document> Get([FromODataUri] Guid key)
-        => SingleResult.Create(_readDb.Documents.Where(d => d.Id == key));
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<DocumentResponse>> Get(Guid id)
+    {
+        var document = await _documentService.GetByIdAsync(id);
+        return document == null ? NotFound() : Ok(document);
+    }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Document document)
+    public async Task<ActionResult<DocumentResponse>> Post([FromBody] CreateDocumentRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        _writeDb.Documents.Add(document);
-        await _writeDb.SaveChangesAsync();
-        return Created(document);
+        var created = await _documentService.CreateAsync(request);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Patch([FromODataUri] Guid key, Delta<Document> delta)
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<DocumentResponse>> Patch(Guid id, [FromBody] UpdateDocumentRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var existing = await _writeDb.Documents.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        delta.Patch(existing);
-        existing.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await _writeDb.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_writeDb.Documents.Any(d => d.Id == key)) return NotFound();
-            throw;
-        }
-
-        return Updated(existing);
+        var updated = await _documentService.UpdateAsync(id, request);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Delete([FromODataUri] Guid key)
+    [HttpPost("{id:guid}/move")]
+    public async Task<ActionResult<DocumentResponse>> Move(Guid id, [FromBody] MoveDocumentRequest request)
     {
-        var existing = await _writeDb.Documents.FindAsync(key);
-        if (existing == null) return NotFound();
+        var moved = await _documentService.MoveAsync(id, request);
+        return moved == null ? NotFound() : Ok(moved);
+    }
 
-        _writeDb.Documents.Remove(existing);
-        await _writeDb.SaveChangesAsync();
-        return StatusCode(StatusCodes.Status204NoContent);
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var deleted = await _documentService.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
+    }
+
+    [HttpPost("{id:guid}/attachments")]
+    [RequestSizeLimit(25_000_000)]
+    public async Task<ActionResult<AttachmentResponse>> UploadAttachment(Guid id, IFormFile file)
+    {
+        if (file.Length == 0) return BadRequest(new { message = "File is empty." });
+
+        await using var stream = file.OpenReadStream();
+        var result = await _documentService.AddAttachmentAsync(id, stream, file.FileName, file.ContentType, file.Length);
+
+        return result.Status switch
+        {
+            AttachmentUploadStatus.Success => Ok(result.Attachment),
+            AttachmentUploadStatus.DocumentNotFound => NotFound(),
+            AttachmentUploadStatus.StorageNotConfigured =>
+                StatusCode(StatusCodes.Status501NotImplemented, new { message = "File storage is not configured." }),
+            _ => BadRequest()
+        };
+    }
+
+    [HttpDelete("{id:guid}/attachments/{attachmentId:guid}")]
+    public async Task<IActionResult> DeleteAttachment(Guid id, Guid attachmentId)
+    {
+        var deleted = await _documentService.DeleteAttachmentAsync(id, attachmentId);
+        return deleted ? NoContent() : NotFound();
     }
 }

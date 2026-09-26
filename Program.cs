@@ -2,12 +2,15 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
+using Mapster;
+using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OData;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
+using learnflow_service.Mapping;
 using learnflow_service.Models;
 using learnflow_service.Utils;
 using Serilog;
@@ -131,26 +134,59 @@ try
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
 
+    TypeAdapterConfig.GlobalSettings.Scan(typeof(MappingConfig).Assembly);
+    builder.Services.AddMapster();
+
     builder.Services.AddScoped<learnflow_service.Repositories.ICourseRepository, learnflow_service.Repositories.CourseRepository>();
     builder.Services.AddScoped<learnflow_service.Services.ICourseService, learnflow_service.Services.CourseService>();
 
+    builder.Services.AddScoped<learnflow_service.Repositories.ITopicRepository, learnflow_service.Repositories.TopicRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.ITopicService, learnflow_service.Services.TopicService>();
+
+    builder.Services.AddScoped<learnflow_service.Repositories.ITopicFolderRepository, learnflow_service.Repositories.TopicFolderRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.ITopicFolderService, learnflow_service.Services.TopicFolderService>();
+
+    builder.Services.AddScoped<learnflow_service.Repositories.INoteRepository, learnflow_service.Repositories.NoteRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.INoteService, learnflow_service.Services.NoteService>();
+
+    builder.Services.AddScoped<learnflow_service.Repositories.ITagRepository, learnflow_service.Repositories.TagRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.ITagService, learnflow_service.Services.TagService>();
+
+    builder.Services.AddScoped<learnflow_service.Repositories.IDocumentRepository, learnflow_service.Repositories.DocumentRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.IDocumentService, learnflow_service.Services.DocumentService>();
+
     // Firebase is optional for local development — the service boots without a credential file.
     var firebaseCredentialPath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIAL_PATH") ?? "prod_firebase.json";
+    var firebaseStorageBucket = Environment.GetEnvironmentVariable("FIREBASE_STORAGE_BUCKET");
+    Google.Cloud.Storage.V1.StorageClient? storageClient = null;
     if (File.Exists(firebaseCredentialPath))
     {
 #pragma warning disable CS0618
-        using var stream = File.OpenRead(firebaseCredentialPath);
+        var credential = GoogleCredential.FromFile(firebaseCredentialPath);
         FirebaseApp.Create(new AppOptions
         {
-            Credential = GoogleCredential.FromStream(stream)
+            Credential = credential
         });
 #pragma warning restore CS0618
         Log.Information("✓ Firebase Admin SDK initialized.");
+
+        if (!string.IsNullOrEmpty(firebaseStorageBucket))
+        {
+            storageClient = Google.Cloud.Storage.V1.StorageClient.Create(credential);
+            Log.Information("✓ Firebase Storage configured for bucket {Bucket}.", firebaseStorageBucket);
+        }
+        else
+        {
+            Log.Warning("FIREBASE_STORAGE_BUCKET not set. Attachment uploads disabled.");
+        }
     }
     else
     {
-        Log.Warning("Firebase credential file not found at {Path}. Firebase sync disabled.", firebaseCredentialPath);
+        Log.Warning("Firebase credential file not found at {Path}. Firebase sync and storage disabled.", firebaseCredentialPath);
     }
+
+    builder.Services.AddSingleton<learnflow_service.Services.IFileStorageService>(
+        new learnflow_service.Services.FirebaseStorageService(storageClient, firebaseStorageBucket));
 
     var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET")
         ?? throw new InvalidOperationException("JWT_SECRET environment variable is not set.");
@@ -226,10 +262,6 @@ static IEdmModel GetEdmModel()
     builder.EntitySet<AdminPermission>("AdminPermissions");
     builder.EntitySet<AdminRolePermission>("AdminRolePermissions");
     builder.EntitySet<AdminUserRole>("AdminUserRoles");
-    builder.EntitySet<Topic>("Topics");
-    builder.EntitySet<TopicFolder>("TopicFolders");
-    builder.EntitySet<Document>("Documents");
-    builder.EntitySet<Note>("Notes");
     builder.EntitySet<StudyBlock>("StudyBlocks");
     return builder.GetEdmModel();
 }

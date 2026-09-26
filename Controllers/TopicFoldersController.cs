@@ -1,77 +1,72 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Deltas;
-using Microsoft.AspNetCore.OData.Formatter;
-using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Results;
-using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using learnflow_service.Models;
+using learnflow_service.Dtos;
+using learnflow_service.Services;
 
 namespace learnflow_service.Controllers;
 
-public class TopicFoldersController : ODataController
+[ApiController]
+[Route("v1/[controller]")]
+public class TopicFoldersController : ControllerBase
 {
-    private readonly ApplicationDbContext _readDb;
-    private readonly ApplicationDbContext _writeDb;
+    private readonly ITopicFolderService _folderService;
 
-    public TopicFoldersController(
-        [FromKeyedServices("read")] ApplicationDbContext readDb,
-        [FromKeyedServices("write")] ApplicationDbContext writeDb)
+    public TopicFoldersController(ITopicFolderService folderService)
     {
-        _readDb = readDb;
-        _writeDb = writeDb;
+        _folderService = folderService;
     }
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public IQueryable<TopicFolder> Get() => _readDb.TopicFolders;
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<TopicFolderResponse>>> Get([FromQuery] TopicFolderQueryParameters query)
+        => Ok(await _folderService.GetAllAsync(query));
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public SingleResult<TopicFolder> Get([FromODataUri] Guid key)
-        => SingleResult.Create(_readDb.TopicFolders.Where(f => f.Id == key));
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<TopicFolderResponse>> Get(Guid id)
+    {
+        var folder = await _folderService.GetByIdAsync(id);
+        return folder == null ? NotFound() : Ok(folder);
+    }
+
+    [HttpGet("tree")]
+    public async Task<ActionResult<List<TopicFolderTreeNode>>> GetTree([FromQuery] Guid topicId)
+        => Ok(await _folderService.GetTreeAsync(topicId));
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] TopicFolder folder)
+    public async Task<ActionResult<TopicFolderResponse>> Post([FromBody] CreateTopicFolderRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        _writeDb.TopicFolders.Add(folder);
-        await _writeDb.SaveChangesAsync();
-        return Created(folder);
+        var created = await _folderService.CreateAsync(request);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Patch([FromODataUri] Guid key, Delta<TopicFolder> delta)
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<TopicFolderResponse>> Patch(Guid id, [FromBody] UpdateTopicFolderRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var existing = await _writeDb.TopicFolders.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        delta.Patch(existing);
-        existing.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await _writeDb.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_writeDb.TopicFolders.Any(f => f.Id == key)) return NotFound();
-            throw;
-        }
-
-        return Updated(existing);
+        var updated = await _folderService.UpdateAsync(id, request);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Delete([FromODataUri] Guid key)
+    [HttpPost("{id:guid}/move")]
+    public async Task<ActionResult<TopicFolderResponse>> Move(Guid id, [FromBody] MoveTopicFolderRequest request)
     {
-        var existing = await _writeDb.TopicFolders.FindAsync(key);
-        if (existing == null) return NotFound();
+        var (result, folder) = await _folderService.MoveAsync(id, request);
 
-        _writeDb.TopicFolders.Remove(existing);
-        await _writeDb.SaveChangesAsync();
-        return StatusCode(StatusCodes.Status204NoContent);
+        return result switch
+        {
+            MoveFolderResult.Success => Ok(folder),
+            MoveFolderResult.NotFound => NotFound(),
+            MoveFolderResult.InvalidParent => BadRequest(new { message = "Target parent folder does not exist in this topic." }),
+            MoveFolderResult.WouldCreateCycle => BadRequest(new { message = "Cannot move a folder into its own descendant." }),
+            _ => BadRequest()
+        };
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var deleted = await _folderService.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
     }
 }

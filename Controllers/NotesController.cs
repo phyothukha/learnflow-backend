@@ -1,77 +1,53 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Deltas;
-using Microsoft.AspNetCore.OData.Formatter;
-using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Results;
-using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using learnflow_service.Models;
+using learnflow_service.Dtos;
+using learnflow_service.Services;
 
 namespace learnflow_service.Controllers;
 
-public class NotesController : ODataController
+[ApiController]
+[Route("v1/[controller]")]
+public class NotesController : ControllerBase
 {
-    private readonly ApplicationDbContext _readDb;
-    private readonly ApplicationDbContext _writeDb;
+    private readonly INoteService _noteService;
 
-    public NotesController(
-        [FromKeyedServices("read")] ApplicationDbContext readDb,
-        [FromKeyedServices("write")] ApplicationDbContext writeDb)
+    public NotesController(INoteService noteService)
     {
-        _readDb = readDb;
-        _writeDb = writeDb;
+        _noteService = noteService;
     }
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public IQueryable<Note> Get() => _readDb.Notes;
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<NoteResponse>>> Get([FromQuery] NoteQueryParameters query)
+        => Ok(await _noteService.GetAllAsync(query));
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public SingleResult<Note> Get([FromODataUri] Guid key)
-        => SingleResult.Create(_readDb.Notes.Where(n => n.Id == key));
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<NoteResponse>> Get(Guid id)
+    {
+        var note = await _noteService.GetByIdAsync(id);
+        return note == null ? NotFound() : Ok(note);
+    }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Note note)
+    public async Task<ActionResult<NoteResponse>> Post([FromBody] CreateNoteRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        _writeDb.Notes.Add(note);
-        await _writeDb.SaveChangesAsync();
-        return Created(note);
+        var created = await _noteService.CreateAsync(request);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Patch([FromODataUri] Guid key, Delta<Note> delta)
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<NoteResponse>> Patch(Guid id, [FromBody] UpdateNoteRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var existing = await _writeDb.Notes.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        delta.Patch(existing);
-        existing.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await _writeDb.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_writeDb.Notes.Any(n => n.Id == key)) return NotFound();
-            throw;
-        }
-
-        return Updated(existing);
+        var updated = await _noteService.UpdateAsync(id, request);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Delete([FromODataUri] Guid key)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        var existing = await _writeDb.Notes.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        _writeDb.Notes.Remove(existing);
-        await _writeDb.SaveChangesAsync();
-        return StatusCode(StatusCodes.Status204NoContent);
+        var deleted = await _noteService.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
     }
 }

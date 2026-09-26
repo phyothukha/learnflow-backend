@@ -41,4 +41,6 @@ public class Document : BaseModel
     public TopicFolder? Folder { get; set; }
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();
+    public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+    public ICollection<DocumentTag> DocumentTags { get; set; } = new List<DocumentTag>();
 }
