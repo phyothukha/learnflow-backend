@@ -1,77 +1,53 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Deltas;
-using Microsoft.AspNetCore.OData.Formatter;
-using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Results;
-using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using learnflow_service.Models;
+using learnflow_service.Dtos;
+using learnflow_service.Services;
 
 namespace learnflow_service.Controllers;
 
-public class CoursesController : ODataController
+[ApiController]
+[Route("v1/[controller]")]
+public class CoursesController : ControllerBase
 {
-    private readonly ApplicationDbContext _readDb;
-    private readonly ApplicationDbContext _writeDb;
+    private readonly ICourseService _courseService;
 
-    public CoursesController(
-        [FromKeyedServices("read")] ApplicationDbContext readDb,
-        [FromKeyedServices("write")] ApplicationDbContext writeDb)
+    public CoursesController(ICourseService courseService)
     {
-        _readDb = readDb;
-        _writeDb = writeDb;
+        _courseService = courseService;
     }
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public IQueryable<Course> Get() => _readDb.Courses;
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<CourseResponse>>> Get([FromQuery] CourseQueryParameters query)
+        => Ok(await _courseService.GetAllAsync(query));
 
-    [EnableQuery(PageSize = 100, MaxExpansionDepth = 10)]
-    public SingleResult<Course> Get([FromODataUri] Guid key)
-        => SingleResult.Create(_readDb.Courses.Where(c => c.Id == key));
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<CourseResponse>> Get(Guid id)
+    {
+        var course = await _courseService.GetByIdAsync(id);
+        return course == null ? NotFound() : Ok(course);
+    }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Course course)
+    public async Task<ActionResult<CourseResponse>> Post([FromBody] CreateCourseRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        _writeDb.Courses.Add(course);
-        await _writeDb.SaveChangesAsync();
-        return Created(course);
+        var created = await _courseService.CreateAsync(request);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Patch([FromODataUri] Guid key, Delta<Course> delta)
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<CourseResponse>> Patch(Guid id, [FromBody] UpdateCourseRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var existing = await _writeDb.Courses.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        delta.Patch(existing);
-        existing.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await _writeDb.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_writeDb.Courses.Any(c => c.Id == key)) return NotFound();
-            throw;
-        }
-
-        return Updated(existing);
+        var updated = await _courseService.UpdateAsync(id, request);
+        return updated == null ? NotFound() : Ok(updated);
     }
 
-    [EnableQuery]
-    public async Task<IActionResult> Delete([FromODataUri] Guid key)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        var existing = await _writeDb.Courses.FindAsync(key);
-        if (existing == null) return NotFound();
-
-        _writeDb.Courses.Remove(existing);
-        await _writeDb.SaveChangesAsync();
-        return StatusCode(StatusCodes.Status204NoContent);
+        var deleted = await _courseService.DeleteAsync(id);
+        return deleted ? NoContent() : NotFound();
     }
 }

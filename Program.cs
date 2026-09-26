@@ -131,6 +131,9 @@ try
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
 
+    builder.Services.AddScoped<learnflow_service.Repositories.ICourseRepository, learnflow_service.Repositories.CourseRepository>();
+    builder.Services.AddScoped<learnflow_service.Services.ICourseService, learnflow_service.Services.CourseService>();
+
     // Firebase is optional for local development — the service boots without a credential file.
     var firebaseCredentialPath = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIAL_PATH") ?? "prod_firebase.json";
     if (File.Exists(firebaseCredentialPath))
@@ -216,7 +219,6 @@ finally
 static IEdmModel GetEdmModel()
 {
     var builder = new ODataConventionModelBuilder();
-    builder.EntitySet<Course>("Courses");
     builder.EntitySet<Lesson>("Lessons");
     builder.EntitySet<Enrollment>("Enrollments");
     builder.EntitySet<AdminUser>("AdminUsers");
