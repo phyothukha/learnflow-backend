@@ -28,6 +28,8 @@ public class Document : BaseModel
     [MaxLength(50)]
     public string? FileType { get; set; }
 
+    public string? Content { get; set; }
+
     public DocumentStatus Status { get; set; } = DocumentStatus.Unread;
 
     public int TimeSpentMinutes { get; set; }

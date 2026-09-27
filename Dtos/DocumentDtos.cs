@@ -21,6 +21,7 @@ public class DocumentResponse
     public string Title { get; set; } = null!;
     public string? FileUrl { get; set; }
     public string? FileType { get; set; }
+    public string? Content { get; set; }
     public DocumentStatus Status { get; set; }
     public int TimeSpentMinutes { get; set; }
     public DateTime? LastOpenedAt { get; set; }
@@ -46,6 +47,8 @@ public class CreateDocumentRequest
     [MaxLength(50)]
     public string? FileType { get; set; }
 
+    public string? Content { get; set; }
+
     public DocumentStatus Status { get; set; } = DocumentStatus.Unread;
 
     public List<string> Tags { get; set; } = new();
@@ -61,6 +64,8 @@ public class UpdateDocumentRequest
 
     [MaxLength(50)]
     public string? FileType { get; set; }
+
+    public string? Content { get; set; }
 
     public DocumentStatus? Status { get; set; }
     public int? TimeSpentMinutes { get; set; }

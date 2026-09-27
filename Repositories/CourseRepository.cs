@@ -28,10 +28,13 @@ public class CourseRepository : ICourseRepository
         if (query.IsPublished.HasValue)
             courses = courses.Where(c => c.IsPublished == query.IsPublished.Value);
 
+        if (!string.IsNullOrWhiteSpace(query.Search))
+            courses = courses.Where(c => c.Title.Contains(query.Search));
+
         var totalCount = await courses.CountAsync();
 
         var items = await courses
-            .OrderBy(c => c.CreatedAt)
+            .OrderByDescending(c => c.CreatedAt)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync();
